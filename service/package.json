@@ -1,0 +1,7 @@
+{
+  "name": "pause-mobile-reminders",
+  "private": true,
+  "type": "module",
+  "version": "0.2.0",
+  "dependencies": { "web-push": "4.0.0" }
+}

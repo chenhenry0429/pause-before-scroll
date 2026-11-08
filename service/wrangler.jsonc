@@ -1,0 +1,39 @@
+{
+  "name": "pause-mobile-reminders",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-05-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "REMINDERS",
+        "class_name": "Reminder"
+      },
+      {
+        "name": "FEEDBACK",
+        "class_name": "FeedbackStore"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "Reminder"
+      ]
+    },
+    {
+      "tag": "v2-feedback",
+      "new_sqlite_classes": [
+        "FeedbackStore"
+      ]
+    }
+  ],
+  "vars": {
+    "SITE_ORIGIN": "https://pause-before-scroll-chenhenry.chenhenry860.chatgpt.site",
+    "PUBLIC_ORIGIN": "https://chenhenry0429.github.io"
+  }
+}

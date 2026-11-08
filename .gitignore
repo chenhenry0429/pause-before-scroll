@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+.sites-runtime/
+.env*
+.dev.vars*
+*.pem
+*.log
+work/
+outputs/
+.DS_Store

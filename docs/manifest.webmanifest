@@ -1,0 +1,26 @@
+{
+  "id": "./",
+  "name": "停一下 · 把时间留给自己",
+  "short_name": "停一下",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f5ef",
+  "theme_color": "#355b48",
+  "description": "在短视频开始前停一下，为这次观看设一个结束点。",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
