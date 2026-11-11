@@ -1,3 +1,4 @@
+import {randomId,fetchJson,deadline} from './compat.mjs';
 import {apiUrl} from './api.mjs';
 const KEY='pause-mobile.v1';
 const $=selector=>document.querySelector(selector);
@@ -5,7 +6,8 @@ export function initMobile(getActive){
  let config=null,registration=null,installPrompt=null,busy=false,state={enabled:false,cancel:[]};
  const standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
- const supported=()=>isSecureContext&&'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
+ const supported=()=>window.isSecureContext&&'serviceWorker'in navigator&&'PushManager'in window&&'Notification'in window;
+ function limitedNotice(){const title=$('#mobile-banner-title'),copy=$('#mobile-banner-copy');if(title)title.textContent='计时可以用，后台提醒暂不可用。';if(copy)copy.textContent='请同时设置手机自带计时器，避免离开网页后错过时间。';}
  try{state={...state,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{}
  function persist(){localStorage.setItem(KEY,JSON.stringify(state));}
  function message(text){$('#mobile-status').textContent=text;}
@@ -18,15 +20,15 @@ export function initMobile(getActive){
  }
  function getDevice(){if(!state.device){state.device=Array.from(crypto.getRandomValues(new Uint8Array(32))).map(n=>n.toString(16).padStart(2,'0')).join('');persist();}return state.device;}
  async function command(input){
-  const response=await fetch(apiUrl('/api/reminders'),{method:'POST',headers:{'Content-Type':'application/json','X-Reminder-Device':getDevice()},body:JSON.stringify(input),signal:AbortSignal.timeout(15000)});
-  const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'服务暂不可用，请稍后重试。');return result;
+  const reply=await fetchJson(apiUrl('/api/reminders'),{method:'POST',headers:{'Content-Type':'application/json','X-Reminder-Device':getDevice()},body:JSON.stringify(input)}),response=reply.response,result=reply.data;
+  if(!response.ok||!result.ok)throw new Error(result.error||'服务暂不可用，请稍后重试。');return result;
  }
  async function flushCancellations(){
   if(state.disablePending){await command({action:'disable'});state.disablePending=false;persist();}
   for(const id of [...state.cancel]){await command({action:'cancel',id});state.cancel=state.cancel.filter(x=>x!==id);persist();}
  }
  async function refresh(){
-  if(!supported()){message(ios?'请先添加到主屏幕，再从桌面图标打开。需要 iOS 16.4 或更新版本。':'当前浏览器不支持系统推送，请尝试更新 Chrome 或 Firefox。');controls();return;}
+  if(!supported()){limitedNotice();message(ios?'请先用 Safari 添加到主屏幕，再从桌面图标打开。需要 iOS 16.4 或更新版本。计时功能仍可使用。':'当前浏览器不支持后台通知，计时和回顾仍可使用。请从手机浏览器打开在线版；锁屏提醒可先使用手机自带计时器。');controls();return;}
   if(ios&&!standalone()){message('iPhone：请用 Safari 添加到主屏幕，再从“停一下”图标打开。');controls();return;}
   if(!config?.available){message('手机通知服务暂不可用。计时仍可使用，请同时设置系统计时器。');controls();return;}
   if(Notification.permission==='denied'){message('通知被关闭了。请到手机的通知设置或浏览器网站设置中允许，再重新打开。');controls();return;}
@@ -78,7 +80,7 @@ export function initMobile(getActive){
    let sub=await registration.pushManager.getSubscription();
    const key=Uint8Array.from(atob(config.publicKey.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
    if(sub&&sub.options.applicationServerKey&&!Array.from(new Uint8Array(sub.options.applicationServerKey)).every((n,i)=>n===key[i])){await sub.unsubscribe();sub=null;}
-   if(!sub)sub=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key});
+   if(!sub)sub=await deadline(registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key}),15000,'通知通道未连接成功。计时仍可使用，请检查网络或使用系统计时器。');
    const enabled=await command({action:'enable'});state.epoch=enabled.epoch;
    state.enabled=true;persist();message('手机通知已开启。现在发送一条测试提醒，确认手机能收到。');
    if(getActive())await schedule(getActive());
@@ -92,7 +94,7 @@ export function initMobile(getActive){
   try{
    await flushCancellations();const sub=await registration.pushManager.getSubscription();if(!sub)throw new Error('请重新开启通知。');
    // Reuse on uncertain response; never create duplicate test jobs on retries.
-   state.testId=state.testId||crypto.randomUUID();persist();
+   state.testId=state.testId||randomId();persist();
    await command({action:'test',id:state.testId,subscription:sub.toJSON(),epoch:state.epoch});
    state.testId=null;persist();message('测试提醒已安排，约 10 秒后发送。现在可返回手机桌面，检查通知。');
   }catch(error){message('测试提醒尚未确认：'+error.message);if(error.message.includes('已结束或取消')){state.testId=null;persist();}}
@@ -117,10 +119,11 @@ export function initMobile(getActive){
  async function boot(){
   message('正在检查手机通知…');
   try{
-   if('serviceWorker'in navigator){await navigator.serviceWorker.register(new URL('./sw.js',import.meta.url),{updateViaCache:'none'});registration=await navigator.serviceWorker.ready;}
-   const response=await fetch(apiUrl('/api/reminders'),{cache:'no-store',signal:AbortSignal.timeout(15000)});config=await response.json();
+   if(!supported()){await refresh();return;}
+   await deadline(navigator.serviceWorker.register(new URL('./sw.js',document.baseURI),{updateViaCache:'none'}),10000);registration=await deadline(navigator.serviceWorker.ready,10000);
+   const reply=await fetchJson(apiUrl('/api/reminders'),{cache:'no-store'});if(!reply.response.ok)throw new Error('提醒服务连接失败');config=reply.data;
    await refresh();if(state.device)await flushCancellations();await status();
-  }catch{config=null;message('暂时连不上通知服务。请检查网络后点击重新检查。');controls();}
+  }catch{config=null;limitedNotice();message('暂时连不上通知服务，计时仍可使用。请检查网络后重新检查，或配合手机自带计时器。');controls();}
  }
  boot();return {schedule,cancel,status};
 }

@@ -6,6 +6,7 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
 /* Keep creator navigation on the desktop website, outside the phone app flow. */
+.startup-help{max-width:900px;margin:20px auto;padding:20px;background:#fff8df;border:1px solid #d9be77;border-radius:12px;line-height:1.8;color:#3b4338}.startup-help .link-button{display:inline-block;text-decoration:none}.startup-help span{overflow-wrap:anywhere}.local-copy .layout,.local-copy .creator-link{display:none}dialog:not([open]){display:none}.dialog-backdrop{position:fixed;top:0;right:0;bottom:0;left:0;background:rgba(20,30,20,.5);z-index:1000}.fallback-dialog[open]{display:block;position:fixed;z-index:1001;top:50%;left:50%;margin:0;transform:translate(-50%,-50%);max-height:85vh;overflow:auto}
 @media(max-width:900px),(hover:none) and (pointer:coarse),(display-mode:standalone){.creator-link{display:none}}
 
 /* Mobile installation and notification settings. */

@@ -1,15 +1,32 @@
 <!doctype html>
-<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#355b48"><meta name="description" content="停一下：看短视频前留一个停顿，为观看设定结束点。无需登录，记录只留在本机。"><title>停一下 · 把时间留给自己</title><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="停一下"></head>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#355b48"><meta name="description" content="停一下：看短视频前留一个停顿，为观看设定结束点。无需登录，记录只留在本机。"><title>停一下 · 把时间留给自己</title><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="style.css?v=0.3.1"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="停一下"></head>
 <body>
+<section id="startup-help" class="startup-help" role="status"><strong>停一下 · 打开与运行提示</strong><p id="startup-message">正在启动。若按钮没有反应，请在手机浏览器中打开下方在线地址。</p><a class="primary link-button" href="https://chenhenry0429.github.io/pause-before-scroll/?v=0.3.1">打开在线版 ↗</a><p class="small">请分享网址，不要发送下载后的 HTML 文件。<br><span>chenhenry0429.github.io/pause-before-scroll/</span></p></section>
+<!-- STARTUP_GUARD_START --><script>(function () {
+ if (typeof window.globalThis === 'undefined') window.globalThis = window;
+ window.__pauseLocalFile = location.protocol === 'file:' || location.protocol === 'content:';
+ window.pauseStartupFailure = function (message) {
+  if (window.__pauseStarted) return;
+  var help = document.getElementById('startup-help');
+  help.hidden = false;
+  document.getElementById('startup-message').textContent = message;
+ };
+ if (window.__pauseLocalFile) {
+  document.documentElement.className += ' local-copy';
+  window.pauseStartupFailure('你打开的是保存到手机里的网页文件。请点击“打开在线版”，再在浏览器中使用；不要从文件管理中打开 HTML 文件。');
+ } else {
+  setTimeout(function () { window.pauseStartupFailure('页面尚未启动完成。如果按钮没有反应，请刷新或在手机浏览器中重新打开在线版。'); }, 10000);
+ }
+}());</script><!-- STARTUP_GUARD_END -->
 <a class="skip-link" href="#main">跳到主要内容</a>
 <header class="header"><a class="brand" href="#now" aria-label="停一下首页"><span class="brand-icon">Ⅱ</span><span>停一下<small>PAUSE BEFORE SCROLL</small></span></a><span class="private"><i></i> 记录只留在本机</span></header>
 <div class="layout">
-<aside class="sidebar"><nav aria-label="主导航"><button data-nav="now" aria-current="page"><span>◷</span>现在，停一下</button><button data-nav="review"><span>▥</span>我的回顾</button><button data-nav="settings"><span>☷</span>我的约定</button><button data-nav="feedback"><span>↗</span>反馈与建议</button></nav><div class="side-note"><span class="small-label">留一个空白</span><p>不必把每一分钟<br>都填满。</p><small>没有打卡，没有排名。<br>下一次选择，仍然算数。</small></div><a class="source-link" href="https://github.com/chenhenry0429/pause-before-scroll" target="_blank" rel="noopener">查看开源项目 ↗</a><span class="version">v0.3 · 公开网页版</span></aside>
+<aside class="sidebar"><nav aria-label="主导航"><button data-nav="now" aria-current="page"><span>◷</span>现在，停一下</button><button data-nav="review"><span>▥</span>我的回顾</button><button data-nav="settings"><span>☷</span>我的约定</button><button data-nav="feedback"><span>↗</span>反馈与建议</button></nav><div class="side-note"><span class="small-label">留一个空白</span><p>不必把每一分钟<br>都填满。</p><small>没有打卡，没有排名。<br>下一次选择，仍然算数。</small></div><a class="source-link" href="https://github.com/chenhenry0429/pause-before-scroll" target="_blank" rel="noopener">查看开源项目 ↗</a><span class="version">v0.3.1 · 手机兼容更新</span></aside>
 <main id="main">
 <div id="storage-warning" class="notice" role="status" hidden></div><div id="toast" role="status" hidden></div>
 <section data-page="now">
 <div class="page-heading"><span class="eyebrow" id="greeting">从一个小选择开始</span><h1>先停一下，<br>再决定要不要看。</h1><p>给打开前多留一点空间，给观看设一个结束点。</p></div>
-<section class="mobile-banner"><div><strong>离开网页，也给自己一个提醒。</strong><p>添加到手机桌面，开启通知，再测试一次。</p></div><button class="secondary" data-open-mobile>设置手机提醒 →</button></section><div class="home-grid"><section class="panel planner"><div class="panel-title"><h2>这次，留多少时间？</h2><span class="step-tag">01 / 做个约定</span></div>
+<section class="mobile-banner"><div><strong id="mobile-banner-title">先设置提醒，再开始观看。</strong><p id="mobile-banner-copy">后台通知因浏览器而异。请先设置并发送一条测试提醒。</p></div><button class="secondary" data-open-mobile>设置手机提醒 →</button></section><div class="home-grid"><section class="panel planner"><div class="panel-title"><h2>这次，留多少时间？</h2><span class="step-tag">01 / 做个约定</span></div>
 <form id="plan-form"><fieldset><legend>准备看什么</legend><div class="choice-row"><label class="choice"><input type="radio" name="platform" value="wechat" checked><span>微信视频号<small>聊天照常，自主计时</small></span></label><label class="choice"><input type="radio" name="platform" value="bili"><span>哔哩哔哩<small>为这次观看定个终点</small></span></label></div></fieldset>
 <fieldset><legend>这次计划 <span class="muted">/ 分钟</span></legend><div class="duration-row"><button type="button" class="duration" data-minutes="5" aria-pressed="false">5</button><button type="button" class="duration" data-minutes="10" aria-pressed="true">10</button><button type="button" class="duration" data-minutes="15" aria-pressed="false">15</button><label class="custom-duration">自定<input id="minutes" type="number" min="1" max="180" step="1" value="10" required aria-label="自定义分钟，1至180"></label></div></fieldset>
 <label class="field">现在想看的原因 <span class="muted">（可选）</span><select id="reason"><option value="未选择">先不选原因</option><option>想看特定内容</option><option>想休息一会儿</option><option>只是顺手点开</option><option>想暂时逃开一件事</option></select></label>
@@ -26,6 +43,6 @@
 <dialog id="pause-dialog" aria-labelledby="pause-title"><button class="dialog-close" data-close="pause-dialog" aria-label="取消开始">×</button><span class="eyebrow">给冲动一点空间</span><h2 id="pause-title">这次，真的想看吗？</h2><p>放松肩膀，慢慢呼一口气。<br>选择现在不看，也很好。</p><div class="pause-number" id="pause-count" aria-hidden="true">10</div><p id="pause-status" role="status">短暂停顿中</p><button id="skip-watch" class="primary wide">现在先不看</button><button id="confirm-watch" class="secondary wide" disabled>稍等一下</button></dialog>
 <dialog id="end-dialog" aria-labelledby="end-title"><button class="dialog-close" data-close="end-dialog" aria-label="返回计时">×</button><span class="eyebrow">留一句回顾，就够了</span><h2 id="end-title">这次先到这里。</h2><p id="end-alternative"></p><form id="end-form"><label class="field">此刻的选择<select id="outcome"><option value="stopped">已停下，去做别的</option><option value="continued">还想继续，先记录这一段</option></select></label><label class="field">看完后的感觉<select id="mood"><option value="skip">暂时不评价</option><option value="better">比之前更放松</option><option value="same">差不多</option><option value="worse">比之前更疲惫</option></select></label><button class="primary wide" type="submit">保存这次回顾</button></form></dialog>
 <dialog id="clear-dialog" aria-labelledby="clear-title"><h2 id="clear-title">清除计时、回顾和约定？</h2><p>将删除当前计时、全部回顾和约定，并尝试取消当前提醒，无法撤销。手机通知开关会保留；需要时可单独关闭。需要保留时，请先到“我的回顾”导出。</p><button class="secondary wide" data-close="clear-dialog">保留数据</button><button class="danger wide" id="confirm-clear">确认清除</button></dialog>
-<dialog id="due-dialog" aria-labelledby="due-title"><span class="eyebrow">到约定时间了</span><h2 id="due-title">这次，先看到这里。</h2><p>放下手机，站起来喝口水。<br>再决定接下来做什么。</p><button id="due-finish" class="primary wide">结束并留一句回顾</button><button class="secondary wide" data-close="due-dialog">我知道了</button></dialog><noscript><p>请开启 JavaScript 后使用计时与保存功能。</p></noscript><script type="module" src="app.mjs"></script>
+<dialog id="due-dialog" aria-labelledby="due-title"><span class="eyebrow">到约定时间了</span><h2 id="due-title">这次，先看到这里。</h2><p>放下手机，站起来喝口水。<br>再决定接下来做什么。</p><button id="due-finish" class="primary wide">结束并留一句回顾</button><button class="secondary wide" data-close="due-dialog">我知道了</button></dialog><noscript><p>请开启 JavaScript 后使用计时与保存功能。<a href="https://chenhenry0429.github.io/pause-before-scroll/?v=0.3.1">打开在线版</a></p></noscript><script defer src="app-compat.js?v=0.3.1" onerror="pauseStartupFailure('页面组件未加载成功。请刷新或从浏览器打开在线版。')"></script>
 </body></html>
 

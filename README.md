@@ -4,6 +4,8 @@
 
 网页发布地址：<https://chenhenry0429.github.io/pause-before-scroll/>。
 
+请分享上面的网址，使用手机浏览器打开。不要把“另存为”的 HTML 文件当作安装包发送；文件管理器打开的本地副本可能只有外观，无法计时或响应按钮。v0.3.1 已加入本地副本提示、脚本启动诊断和旧版浏览器兼容处理。
+
 ## 使用
 
 1. 选择视频号或哔哩哔哩、计划观看的分钟数，停顿后决定是否开始。
@@ -35,10 +37,14 @@
 - `lib/`、`tests/` 是查询逻辑与自动检查。
 
 ```sh
+npm ci
+npm run build
 npm ci --prefix service
 npm test
 npm run check
 ```
+
+修改 `docs/*.mjs` 后运行 `npm run build`，把生成的 `docs/app-compat.js`、`docs/sw.js` 和更新后的 `docs/index.html` 一起提交。手机页面使用单一普通脚本，构建目标为 Chrome 70 / Safari 13；这不是对所有同版本手机或浏览器的兼容保证。`scripts/sw-source.js` 是通知脚本源文件。基础计时与通知初始化分开，缺少推送能力时仍可计时和回顾；弹窗和随机编号也提供兼容处理。
 
 部署服务时使用官方 Wrangler CLI：在 `service/` 运行 `npx wrangler deploy`。部署者须先登录 Cloudflare，并配置 `SERVICE_SECRET`、`VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`CREATOR_KEY` 四项机密。已有部署更新时保留现有机密和 Durable Object 类的迁移历史。`PUBLIC_ORIGIN` 为允许的网页来源；`docs/api.mjs` 只包含公开服务地址，不含密钥。
 

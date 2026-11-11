@@ -1,3 +1,4 @@
+import {randomId} from './compat.mjs';
 // Pure data logic. A session measures elapsed planned time, not app or video use.
 export const MAX_HISTORY = 500;
 export const PLATFORMS = Object.freeze(['wechat', 'bili', 'other']);
@@ -73,7 +74,8 @@ function cleanHistory(values) {
   }).slice(0, MAX_HISTORY);
 }
 
-export function createSession({ platform, minutes, reason, alternative } = {}, now = Date.now()) {
+export function createSession(input = {}, now = Date.now()) {
+  const platform=input.platform,minutes=input.minutes,reason=input.reason,alternative=input.alternative;
   requireTimestamp(now);
   if (!PLATFORMS.includes(platform)) throw new TypeError('请选择有效的平台。');
   if (!integer(minutes, 1, 180)) throw new RangeError('时长必须是 1–180 的整数分钟。');
@@ -82,8 +84,8 @@ export function createSession({ platform, minutes, reason, alternative } = {}, n
   if (!cleanReason || !cleanAlternative) throw new TypeError('原因和替代活动必须是有效的简短文本。');
   const endsAt = now + minutes * 60_000;
   requireTimestamp(endsAt);
-  const id = globalThis.crypto?.randomUUID?.()
-    ?? `${now.toString(36)}-${(++fallbackSequence).toString(36)}-${Math.random().toString(36).slice(2)}`;
+  let id;
+  try { id = randomId(); } catch { id = `${now.toString(36)}-${(++fallbackSequence).toString(36)}-${Math.random().toString(36).slice(2)}`; }
   return { id, platform, minutes, reason: cleanReason, alternative: cleanAlternative, startedAt: now, endsAt };
 }
 
@@ -95,7 +97,8 @@ export function remainingMs(session, now = Date.now()) {
   return Math.min(clean.minutes * 60_000, Math.max(0, clean.endsAt - now));
 }
 
-export function finishSession(session, { outcome, mood = 'skip' } = {}, now = Date.now()) {
+export function finishSession(session, input = {}, now = Date.now()) {
+  const outcome=input.outcome,mood=input.mood===undefined?'skip':input.mood;
   const clean = sessionData(session);
   if (!clean) throw new TypeError('无效的计时计划。');
   requireTimestamp(now);
@@ -153,11 +156,12 @@ export function summarize(history, now = Date.now()) {
     seconds += entry.elapsedSeconds;
     if (entry.outcome === 'stopped') stopped += 1;
   }
-  for (const { day, seconds: elapsed } of byDate.values()) day.minutes = Math.round(elapsed / 6) / 10;
+  for (const bucket of byDate.values()) bucket.day.minutes = Math.round(bucket.seconds / 6) / 10;
   return { sessions, minutes: Math.round(seconds / 6) / 10, stopped, days };
 }
 
-export function feedbackUrl(repo, { category, title, body } = {}) {
+export function feedbackUrl(repo, input = {}) {
+  const category=input.category,title=input.title,body=input.body;
   // Only a GitHub owner/repository slug is accepted, never an arbitrary URL.
   if (typeof repo !== 'string' || !/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9_.-]{1,100}$/.test(repo)
       || ['.', '..'].includes(repo.split('/')[1])) throw new TypeError('反馈仓库应为 owner/repo。');
