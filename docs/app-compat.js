@@ -245,19 +245,82 @@
     return { sessions, minutes: Math.round(seconds / 6) / 10, stopped, days };
   }
 
+  // docs/install.mjs
+  var publicUrl = "https://chenhenry0429.github.io/pause-before-scroll/";
+  function deviceContext() {
+    const ua = navigator.userAgent;
+    return {
+      ios: /iPad|iPhone|iPod/.test(ua) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1,
+      android: /Android/.test(ua),
+      embedded: /MicroMessenger|QQ\/|Weibo|DingTalk|AlipayClient|\bwv\b/i.test(ua),
+      standalone: () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true
+    };
+  }
+  function initInstall(device, changed) {
+    const get = (id) => document.getElementById(id);
+    const button = get("install-mobile");
+    const copy = get("copy-link");
+    const link = get("copy-address");
+    const status = get("install-status");
+    let prompt = null, installing = false;
+    function render(message) {
+      button.hidden = !prompt || device.standalone();
+      get("apk-download").hidden = !device.android;
+      status.textContent = message || (device.standalone() ? "已从主屏幕打开。" : prompt ? "可以直接添加到桌面。" : device.embedded ? "如需安装，请点右上角菜单，在手机浏览器中打开。" : device.ios ? "在 Safari 点「分享」→「添加到主屏幕」。" : "浏览器菜单如有「安装应用」或「添加到主屏幕」，可从那里添加。");
+    }
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      prompt = event;
+      render();
+    });
+    window.addEventListener("appinstalled", () => {
+      prompt = null;
+      render("已添加到桌面。");
+      changed();
+    });
+    button.addEventListener("click", async () => {
+      if (!prompt || installing) return;
+      const request = prompt;
+      prompt = null;
+      installing = true;
+      button.disabled = true;
+      try {
+        await request.prompt();
+        const decision = await request.userChoice;
+        render((decision == null ? void 0 : decision.outcome) === "accepted" ? "已同意安装，请在桌面查看图标。" : "已取消安装，仍可在网页使用。");
+      } catch {
+        render("未能打开安装窗口，可继续使用网页，或从浏览器菜单添加。");
+      } finally {
+        installing = false;
+        button.disabled = false;
+      }
+    });
+    copy.addEventListener("click", async () => {
+      const result = get("copy-status");
+      try {
+        await navigator.clipboard.writeText(publicUrl);
+        result.textContent = "链接已复制。";
+      } catch {
+        link.hidden = false;
+        link.focus();
+        link.select();
+        result.textContent = "请长按或选择下方网址复制。";
+      }
+    });
+    get("enhancements").addEventListener("toggle", () => {
+      if (get("enhancements").open) changed();
+    });
+    render();
+  }
+
   // docs/mobile.mjs
   var KEY = "pause-mobile.v1";
   var $ = (selector) => document.querySelector(selector);
   function initMobile(getActive) {
-    let config = null, registration = null, installPrompt = null, busy = false, state = { enabled: false, cancel: [] };
-    const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    let config = null, registration = null, busy = false, state = { enabled: false, cancel: [] };
+    let worker = null, checking = null, testPending = false;
+    const device = deviceContext(), ios = device.ios, standalone = device.standalone;
     const supported = () => window.isSecureContext && "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
-    function limitedNotice() {
-      const title = $("#mobile-banner-title"), copy = $("#mobile-banner-copy");
-      if (title) title.textContent = "计时可以用，后台提醒暂不可用。";
-      if (copy) copy.textContent = "请同时设置手机自带计时器，避免离开网页后错过时间。";
-    }
     try {
       state = { ...state, ...JSON.parse(localStorage.getItem(KEY) || "{}") };
     } catch {
@@ -272,10 +335,16 @@
       $("#session-push-status").textContent = text;
     }
     function controls() {
-      $("#enable-mobile").disabled = busy || !(config == null ? void 0 : config.available) || !registration || !supported() || ios && !standalone();
-      $("#test-mobile").disabled = busy || !state.enabled || !(config == null ? void 0 : config.available) || !supported();
-      $("#disable-mobile").disabled = busy || !state.enabled;
-      $("#retry-reminder").hidden = !state.enabled || !getActive();
+      const eligible = supported() && (!ios || standalone()) && Notification.permission !== "denied";
+      const enabled = eligible && state.enabled && Notification.permission === "granted";
+      $("#enable-mobile").hidden = !eligible || enabled || !(config == null ? void 0 : config.available);
+      $("#enable-mobile").disabled = busy;
+      $("#test-mobile").hidden = !enabled || !(config == null ? void 0 : config.available);
+      $("#test-mobile").disabled = busy;
+      $("#disable-mobile").hidden = !state.enabled && !state.disablePending;
+      $("#disable-mobile").disabled = busy;
+      $("#refresh-mobile").hidden = !supported() || ios && !standalone();
+      $("#retry-reminder").hidden = !enabled || !getActive() || getActive().endsAt <= Date.now();
     }
     function getDevice() {
       if (!state.device) {
@@ -302,24 +371,23 @@
       }
     }
     async function refresh() {
-      if (!supported()) {
-        limitedNotice();
-        message(ios ? "请先用 Safari 添加到主屏幕，再从桌面图标打开。需要 iOS 16.4 或更新版本。计时功能仍可使用。" : "当前浏览器不支持后台通知，计时和回顾仍可使用。请从手机浏览器打开在线版；锁屏提醒可先使用手机自带计时器。");
-        controls();
-        return;
-      }
       if (ios && !standalone()) {
-        message("iPhone：请用 Safari 添加到主屏幕，再从“停一下”图标打开。");
+        message("iPhone 可用 Safari 添加到主屏幕，再从图标开启通知。需要 iOS 16.4 或更新版本。");
         controls();
         return;
       }
-      if (!(config == null ? void 0 : config.available)) {
-        message("手机通知服务暂不可用。计时仍可使用，请同时设置系统计时器。");
+      if (!supported()) {
+        message(device.embedded ? "这个内置浏览器不能发送网页提醒。需要提醒时，可从菜单在手机浏览器中打开，或复制链接。" : "当前浏览器不提供网页推送。你仍可计时和保存回顾。");
         controls();
         return;
       }
       if (Notification.permission === "denied") {
         message("通知被关闭了。请到手机的通知设置或浏览器网站设置中允许，再重新打开。");
+        controls();
+        return;
+      }
+      if (!(config == null ? void 0 : config.available)) {
+        message("提醒服务未就绪。可重新检查，计时仍可使用。");
         controls();
         return;
       }
@@ -331,15 +399,28 @@
         } catch {
         }
       }
-      message(state.enabled ? "手机通知已开启。请发送测试提醒，确认这台手机能够收到。" : "添加到主屏幕后，点击开启通知。系统询问时选择“允许”。");
+      message(state.enabled ? "网页通知已开启。发一条测试提醒，确认这台手机能收到。" : "尚未开启通知。需要锁屏提醒时，点击开启并选择「允许」。");
       controls();
     }
     async function schedule(active) {
       var _a, _b;
       controls();
       if (!active) return;
+      if (!supported() || ios && !standalone()) {
+        sessionMessage("当前环境不能安排网页后台提醒。返回本页时会显示到期提示。");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        sessionMessage("通知权限已拒绝。可在浏览器或系统设置中允许。");
+        return;
+      }
       if (!state.enabled) {
-        sessionMessage("手机通知尚未开启。请到“我的约定”设置，或使用系统计时器。");
+        sessionMessage("尚未开启后台提醒。可继续计时，也可现在设置。");
+        return;
+      }
+      if (!registration || !(config == null ? void 0 : config.available)) {
+        sessionMessage("尚未连接提醒服务。请重试安排，计时会继续。");
+        await boot(active);
         return;
       }
       if (active.endsAt <= Date.now()) {
@@ -382,10 +463,7 @@
       var _a, _b, _c;
       const active = getActive();
       controls();
-      if (!state.enabled) {
-        if (active) sessionMessage("未启用手机通知。请使用系统计时器。");
-        return;
-      }
+      if (!state.enabled || !supported() || !(config == null ? void 0 : config.available)) return;
       try {
         await flushCancellations();
         const result = await command({ action: "status" });
@@ -414,7 +492,8 @@
       controls();
       try {
         const permission = await Notification.requestPermission();
-        if (permission !== "granted") throw new Error("未获得通知权限，请在手机设置中允许。");
+        if (permission === "denied") throw new Error("通知权限已拒绝，可在浏览器网站设置或系统设置中允许。");
+        if (permission !== "granted") throw new Error("尚未开启通知。需要提醒时可再点一次。");
         getDevice();
         await flushCancellations();
         let sub = await registration.pushManager.getSubscription();
@@ -440,7 +519,7 @@
     $("#test-mobile").addEventListener("click", async () => {
       if (busy) return;
       if (getActive()) {
-        message("请先结束当前计时，再发送测试提醒。");
+        $("#test-status").textContent = "请先完成这次计时，再测试，避免影响已安排的提醒。";
         return;
       }
       busy = true;
@@ -454,9 +533,11 @@
         await command({ action: "test", id: state.testId, subscription: sub.toJSON(), epoch: state.epoch });
         state.testId = null;
         persist();
-        message("测试提醒已安排，约 10 秒后发送。现在可返回手机桌面，检查通知。");
+        testPending = true;
+        $("#test-status").textContent = "测试已安排，服务约 10 秒后发送。请切到桌面或锁屏，看到通知后再确认。";
+        $("#test-confirm").hidden = false;
       } catch (error) {
-        message("测试提醒尚未确认：" + error.message);
+        $("#test-status").textContent = "测试未确认安排：" + error.message;
         if (error.message.includes("已结束或取消")) {
           state.testId = null;
           persist();
@@ -466,6 +547,14 @@
         controls();
       }
     });
+    function confirmTest(received) {
+      if (!testPending) return;
+      testPending = false;
+      $("#test-confirm").hidden = true;
+      $("#test-status").textContent = received ? "已记录，这台手机收到了测试通知。" : "没有收到。确认系统允许浏览器通知，再检查勿扰模式和网络，或试用安卓安装版。";
+    }
+    $("#test-received").addEventListener("click", () => confirmTest(true));
+    $("#test-missed").addEventListener("click", () => confirmTest(false));
     $("#disable-mobile").addEventListener("click", async () => {
       if (busy) return;
       busy = true;
@@ -499,63 +588,137 @@
     });
     $("#retry-reminder").addEventListener("click", () => schedule(getActive()));
     $("#refresh-mobile").addEventListener("click", () => boot());
-    window.addEventListener("beforeinstallprompt", (event) => {
-      event.preventDefault();
-      installPrompt = event;
-      $("#install-mobile").hidden = false;
-    });
-    $("#install-mobile").addEventListener("click", async () => {
-      if (installPrompt) {
-        await installPrompt.prompt();
-        installPrompt = null;
-        $("#install-mobile").hidden = true;
-      }
-    });
-    window.addEventListener("appinstalled", () => {
-      $("#install-mobile").hidden = true;
-      refresh();
-    });
+    initInstall(device, () => boot());
     window.addEventListener("online", () => {
-      flushCancellations().then(status).catch(() => {
-      });
+      if (state.enabled || state.disablePending || state.cancel.length) boot();
     });
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) status();
+      if (!document.hidden && (state.enabled || $("#enhancements").open)) boot();
     });
     window.addEventListener("storage", (event) => {
       if (event.key === KEY) {
         try {
           state = { enabled: false, cancel: [], ...JSON.parse(event.newValue || "{}") };
-          refresh();
-          status();
+          boot();
         } catch {
         }
       }
     });
-    async function boot() {
-      message("正在检查手机通知…");
-      try {
-        if (!supported()) {
-          await refresh();
-          return;
-        }
-        await deadline(navigator.serviceWorker.register(new URL("./sw.js", document.baseURI), { updateViaCache: "none" }), 1e4);
-        registration = await deadline(navigator.serviceWorker.ready, 1e4);
-        const reply = await fetchJson(apiUrl("/api/reminders"), { cache: "no-store" });
-        if (!reply.response.ok) throw new Error("提醒服务连接失败");
-        config = reply.data;
-        await refresh();
-        if (state.device) await flushCancellations();
-        await status();
-      } catch {
-        config = null;
-        limitedNotice();
-        message("暂时连不上通知服务，计时仍可使用。请检查网络后重新检查，或配合手机自带计时器。");
-        controls();
+    function prepareWorker() {
+      if (!("serviceWorker" in navigator) || !window.isSecureContext) return Promise.resolve(null);
+      if (!worker) {
+        worker = deadline(navigator.serviceWorker.register(new URL("./sw.js", document.baseURI), { updateViaCache: "none" }), 6500).then(() => deadline(navigator.serviceWorker.ready, 6500)).catch(() => {
+          worker = null;
+          return null;
+        });
       }
+      return worker;
     }
-    boot();
+    async function boot(resume) {
+      var _a;
+      if (!checking) {
+        checking = (async () => {
+          if (!supported() || ios && !standalone() || Notification.permission === "denied") {
+            await refresh();
+            return;
+          }
+          message("正在检查网页提醒…");
+          controls();
+          registration = await prepareWorker();
+          if (!registration) {
+            config = null;
+            message("浏览器没有启用网页提醒组件。可点重新检查，或用手机浏览器打开。");
+            controls();
+            return;
+          }
+          try {
+            const reply = await fetchJson(apiUrl("/api/reminders"), { cache: "no-store" }, 6500);
+            if (!reply.response.ok) throw new Error("提醒接口不可用");
+            config = reply.data;
+            await refresh();
+            if (state.device && (state.disablePending || state.cancel.length)) await flushCancellations().catch(() => {
+            });
+            await status();
+          } catch {
+            config = null;
+            message(navigator.onLine === false ? "设备当前离线。联网后可重新检查；计时仍可用。" : "网页无法连接提醒服务。可重新检查，或用安卓安装版的本机提醒。");
+            if (getActive() && state.enabled) sessionMessage("暂时无法核实后台提醒，计时仍在继续。");
+            controls();
+          }
+        })().finally(() => {
+          checking = null;
+        });
+      }
+      await checking;
+      if (resume && (config == null ? void 0 : config.available) && registration && ((_a = getActive()) == null ? void 0 : _a.id) === resume.id) await schedule(resume);
+    }
+    prepareWorker();
+    if (state.enabled || state.disablePending || state.cancel.length) boot();
     return { schedule, cancel, status };
+  }
+
+  // docs/android.mjs
+  var androidBridge = window.PauseAndroid || null;
+  function initAndroid(getActive) {
+    const get = (id) => document.getElementById(id);
+    const bridge = androidBridge;
+    let test = false;
+    function read(value) {
+      return JSON.parse(value);
+    }
+    function render(active = getActive()) {
+      const info = read(bridge.status());
+      const canNotify = info.notifications === "allowed";
+      get("mobile-status").textContent = {
+        allowed: info.exact ? "通知已开启，可安排本机准时提醒。" : "通知已开启。允许「闹钟和提醒」可提高准时性；目前系统可能延迟。",
+        denied: "通知权限已拒绝，请到系统设置允许「停一下」通知。",
+        off: "尚未开启通知。开启后可在锁屏或切换应用时接收本机提醒。"
+      }[info.notifications];
+      get("enable-mobile").hidden = canNotify;
+      get("enable-mobile").textContent = info.notifications === "denied" ? "打开系统通知设置" : "允许通知";
+      get("enable-mobile").disabled = false;
+      get("exact-mobile").hidden = !canNotify || info.exact;
+      get("test-mobile").hidden = !canNotify;
+      get("test-mobile").disabled = false;
+      get("disable-mobile").hidden = true;
+      get("refresh-mobile").hidden = true;
+      if (!active) return;
+      get("retry-reminder").hidden = !canNotify || info.id === active.id || active.endsAt <= Date.now();
+      get("session-push-status").textContent = !canNotify ? "本机提醒未开启。计时继续，返回页面后会显示结果。" : info.id === active.id && info.posted ? "已向系统通知栏提交提醒。请查看手机通知。" : info.id === active.id && info.mode === "exact" ? "本机提醒已安排，可切换应用或锁屏。" : info.id === active.id && info.mode === "approximate" ? "本机提醒已安排，省电时可能延迟。可开启「闹钟和提醒」。" : "这次尚未安排本机提醒。";
+    }
+    function schedule(active = getActive()) {
+      if (active && active.endsAt > Date.now()) bridge.schedule(active.id, active.endsAt);
+      render(active);
+    }
+    get("mobile-kind").textContent = "系统本地提醒，断网也可安排。";
+    get("enable-mobile").addEventListener("click", () => bridge.requestNotifications());
+    get("exact-mobile").addEventListener("click", () => bridge.requestExactAlarm());
+    get("retry-reminder").addEventListener("click", () => schedule());
+    get("test-mobile").addEventListener("click", () => {
+      const timer = read(bridge.test());
+      test = timer.ok;
+      get("test-status").textContent = !test ? "未能安排测试，请检查系统通知权限。" : timer.mode === "exact" ? "测试已安排。现在可锁屏，约 10 秒后检查通知。" : "测试已安排。系统可能延迟，请检查通知栏后确认。";
+      get("test-confirm").hidden = !test;
+    });
+    get("test-received").addEventListener("click", () => {
+      if (!test) return;
+      get("test-status").textContent = "已记录，这台设备收到了测试通知。";
+      get("test-confirm").hidden = true;
+      test = false;
+    });
+    get("test-missed").addEventListener("click", () => {
+      if (!test) return;
+      get("test-status").textContent = "没有收到。请检查系统通知和「闹钟和提醒」权限，再试一次。";
+      get("test-confirm").hidden = true;
+      test = false;
+    });
+    get("install-guide").hidden = true;
+    document.documentElement.classList.add("native-android");
+    window.addEventListener("pause-android-resume", () => schedule());
+    schedule();
+    return { schedule, status: render, cancel(id) {
+      if (id) bridge.cancel(id);
+    } };
   }
 
   // docs/app.mjs
@@ -851,7 +1014,11 @@
       toast(persistent ? "约定已保存，下次开始时生效。" : "约定暂存在页面内，刷新后可能丢失。");
     });
     $2("#export").addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify({ exportedAt: (/* @__PURE__ */ new Date()).toISOString(), description: "用户主动计时，非真实观看监测", ...data }, null, 2)], { type: "application/json" });
+      if (androidBridge) {
+        androidBridge.exportRecords();
+        return;
+      }
+      const blob = new Blob([exportData()], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -873,6 +1040,10 @@
       route("now");
       toast(persistent ? "本机计时、回顾和约定已清除。手机通知开关保持原样。" : "页面内数据已清除；浏览器存储不可用，无法确认其中的旧数据已删除。");
     });
+    function exportData() {
+      return JSON.stringify({ exportedAt: (/* @__PURE__ */ new Date()).toISOString(), description: "用户主动计时，非真实观看监测", ...data }, null, 2);
+    }
+    if (androidBridge) window.pauseAndroidSaveExport = () => toast(androidBridge.writeExport(exportData()) ? "已保存导出文件。" : "暂时无法保存文件，请重试。");
     let feedbackDraft = null, submitting = false;
     $2("#feedback-form").addEventListener("input", () => {
       if (!submitting) {
@@ -931,7 +1102,9 @@
     $2("#enable-sound").addEventListener("click", startAudio);
     $$("[data-open-mobile]").forEach((button) => button.addEventListener("click", () => {
       route("settings");
-      $2("#mobile-panel").scrollIntoView({ block: "start", behavior: "smooth" });
+      const panel = $2("#enhancements");
+      panel.open = true;
+      panel.scrollIntoView({ block: "start" });
     }));
     $2("#due-finish").addEventListener("click", () => {
       closeDialog("due-dialog");
@@ -956,9 +1129,9 @@
     tick();
     setInterval(tick, 500);
     try {
-      mobile = initMobile(() => data.active);
+      mobile = androidBridge ? initAndroid(() => data.active) : initMobile(() => data.active);
     } catch {
-      document.querySelector("#mobile-status").textContent = "此浏览器暂时不能开启手机通知。计时与回顾仍可使用，请配合手机自带计时器。";
+      document.querySelector("#mobile-status").textContent = "提醒设置未能启动。计时与回顾仍可使用。";
     }
   }
 

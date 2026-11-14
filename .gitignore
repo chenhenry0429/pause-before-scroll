@@ -8,3 +8,11 @@ node_modules/
 work/
 outputs/
 .DS_Store
+
+android/build/
+*.jks
+*.keystore
+*.p12
+*.apk
+*.idsig
+
